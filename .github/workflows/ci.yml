@@ -39,4 +39,4 @@ jobs:
     - name: Build Docker image 
       run: |
         docker build -t api.sjaplus.top:latest .
-      if: github.ref == 'refs/heads/main'  # Only on main branch
+      if: github.ref == 'refs/heads/main'
