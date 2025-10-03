@@ -9,4 +9,7 @@ import (
 func SetupRoutes(r *gin.Engine) {
 	// Test route
 	r.GET("/test", handlers.TestHandler)
+
+	// Project application route
+	r.POST("/project-apply", handlers.ProjectApplyHandler)
 }
