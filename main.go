@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"api.sjaplus.top/routes"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -18,5 +20,10 @@ func main() {
 	// Setup routes
 	routes.SetupRoutes(r)
 
-	r.Run(":8080") // 监听 8080 端口
+	port := os.Getenv("BACKEND_PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	r.Run(":" + port)
 }
