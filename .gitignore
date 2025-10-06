@@ -1,2 +1,10 @@
+# environment variable files
 .env*
+
+# builded binary
 sja-backend
+
+# ignore server dynamic content
+/var/**
+!/var/**/
+!README.md
