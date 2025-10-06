@@ -12,4 +12,8 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Project application route
 	r.POST("/project-apply", handlers.ProjectApplyHandler)
+
+	// Project display routes
+	r.GET("/project/avatar", handlers.ProjectAvatarHandler)
+	r.GET("/project/poster", handlers.ProjectPosterHandler)
 }
