@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"api.sjaplus.top/internal/analyzer"
-	"api.sjaplus.top/internal/store"
+	"github.com/remyhuang03/sja-backend/internal/analyzer"
+	"github.com/remyhuang03/sja-backend/internal/store"
 )
 
 type Server struct {

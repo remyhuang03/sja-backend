@@ -1,4 +1,4 @@
-module api.sjaplus.top
+module github.com/remyhuang03/sja-backend
 
 go 1.27.1
 

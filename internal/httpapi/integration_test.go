@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"api.sjaplus.top/internal/store"
+	"github.com/remyhuang03/sja-backend/internal/store"
 )
 
 func TestApplicationReviewFlow(t *testing.T) {

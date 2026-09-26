@@ -15,8 +15,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"api.sjaplus.top/internal/store"
 	"github.com/jackc/pgx/v5"
+	"github.com/remyhuang03/sja-backend/internal/store"
 	_ "golang.org/x/image/webp"
 )
 

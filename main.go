@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"api.sjaplus.top/internal/httpapi"
-	"api.sjaplus.top/internal/store"
+	"github.com/remyhuang03/sja-backend/internal/httpapi"
+	"github.com/remyhuang03/sja-backend/internal/store"
 )
 
 func main() {
