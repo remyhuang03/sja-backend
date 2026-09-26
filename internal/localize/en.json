@@ -144,5 +144,10 @@
   "矩阵": "Matrices",
   "录音": "Recording",
   "  三  ": "Three",
-  "面板": "Panel"
+  "面板": "Panel",
+  "提交内容无效": "Invalid submission.",
+  "请填写网站名称、分类并确认收录要求": "Enter a website name and category, and confirm the submission requirements.",
+  "请填写有效的公开网站网址": "Enter a valid public website URL.",
+  "该网站已收录或正在审核": "This website is already listed or awaiting review.",
+  "网站提交成功，审核通过后将公开显示": "Website submitted. It will be published after approval."
 }

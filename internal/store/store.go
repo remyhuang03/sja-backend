@@ -39,6 +39,7 @@ type Application struct {
 	Notes      string     `json:"reviewer_notes"`
 }
 type Project struct {
+	Links       []Link `json:"links"`
 	ID          int64  `json:"id"`
 	Name        string `json:"name"`
 	Author      string `json:"author"`
@@ -178,7 +179,7 @@ func (s *Store) Review(ctx context.Context, id, status, notes string) error {
 	return tx.Commit(ctx)
 }
 func (s *Store) Projects(ctx context.Context, n int) ([]Project, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT id,name,author,author_link,project_link,brief,cover_path,avatar_path FROM projects ORDER BY created_at DESC,id DESC LIMIT $1`, n)
+	rows, err := s.Pool.Query(ctx, `SELECT p.id,p.name,p.author,p.author_link,p.project_link,p.brief,p.cover_path,p.avatar_path,COALESCE(a.links,'[]'::jsonb) FROM projects p LEFT JOIN applications a ON a.id=p.application_id ORDER BY p.created_at DESC,p.id DESC LIMIT $1`, n)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +187,11 @@ func (s *Store) Projects(ctx context.Context, n int) ([]Project, error) {
 	out := []Project{}
 	for rows.Next() {
 		var p Project
-		if err = rows.Scan(&p.ID, &p.Name, &p.Author, &p.AuthorLink, &p.ProjectLink, &p.Brief, &p.CoverPath, &p.AvatarPath); err != nil {
+		var links []byte
+		if err = rows.Scan(&p.ID, &p.Name, &p.Author, &p.AuthorLink, &p.ProjectLink, &p.Brief, &p.CoverPath, &p.AvatarPath, &links); err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal(links, &p.Links); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

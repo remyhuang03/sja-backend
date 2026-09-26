@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/remyhuang03/sja-backend/internal/store"
+	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
 
@@ -82,7 +83,7 @@ func saveImage(r *http.Request, key, path string, limit int64) error {
 	if err != nil {
 		return err
 	}
-	err = png.Encode(out, img)
+	err = png.Encode(out, normalizeShowcaseImage(img, key))
 	closeErr := out.Close()
 	if err != nil {
 		return err
@@ -142,7 +143,7 @@ func (s *Server) apply(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) media(w http.ResponseWriter, r *http.Request) {
 	id, name := r.PathValue("id"), r.PathValue("file")
-	if !uuidName.MatchString(id) || (name != "cover.png" && name != "avatar.png") {
+	if !uuidName.MatchString(id) || (name != "cover.png" && name != "avatar.png" && name != "favicon.png") {
 		fail(w, 404, "图片不存在")
 		return
 	}
@@ -180,4 +181,25 @@ func (s *Server) review(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"success": true, "message": "审核完成"})
+}
+
+// Normalize every accepted upload, including API clients that bypass the browser cropper.
+func normalizeShowcaseImage(img image.Image, key string) image.Image {
+	width, height := 256, 256
+	if key == "cover" {
+		width, height = 1200, 900
+	}
+	bounds := img.Bounds()
+	sourceWidth, sourceHeight := bounds.Dx(), bounds.Dy()
+	cropWidth, cropHeight := sourceWidth, sourceHeight
+	if sourceWidth*height > sourceHeight*width {
+		cropWidth = max(1, sourceHeight*width/height)
+	} else {
+		cropHeight = max(1, sourceWidth*height/width)
+	}
+	x := bounds.Min.X + (sourceWidth-cropWidth)/2
+	y := bounds.Min.Y + (sourceHeight-cropHeight)/2
+	out := image.NewRGBA(image.Rect(0, 0, width, height))
+	draw.CatmullRom.Scale(out, out.Bounds(), img, image.Rect(x, y, x+cropWidth, y+cropHeight), draw.Src, nil)
+	return out
 }

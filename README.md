@@ -9,7 +9,7 @@ The backend uses Go's `net/http` package and the pgx PostgreSQL connection pool.
 | `internal/analyzer` | Bounded project parsing, block statistics, SVG reports, structural comparison |
 | `internal/httpapi` | HTTP routing, upload limits, validation, administrator authentication |
 | `internal/store` | PostgreSQL queries, review transactions, embedded versioned migrations |
-| `internal/localize` | Chinese, English, and Japanese API/report messages |
+| `internal/localize` | Simplified Chinese, Traditional Chinese, English, and Japanese API/report messages |
 
 Analysis has no mutable request state shared across requests. Iterative traversal handles cycles and shared inputs. ZIP parsing reads only the root `project.json`, without extracting assets. Limits are 48 MiB per source file, 64 MiB for expanded JSON, and 200,000 blocks. Analysis, comparison, and image decoding share two processing slots; excess requests receive HTTP 429. Images are decoded, checked for dimensions, and re-encoded as PNG.
 
@@ -17,7 +17,7 @@ Submissions and published projects share one database. Reviews lock the applicat
 
 ## Run
 
-Use `compose.yaml` in the adjacent `sja-v3` repository to start PostgreSQL, backend, and frontend together.
+Use `compose.yaml` in the adjacent frontend repository to start PostgreSQL, backend, and frontend together.
 
 Standalone development requires Go 1.27 and PostgreSQL 18:
 
@@ -48,7 +48,7 @@ Accepted original projects from analysis and comparison are retained privately f
 
 Sort options are `desc`, `asc`, and `none`. Category modes are `top12` and `classic`. Legacy `0` and `1` values remain accepted. Active scripts begin at event hats or custom block definitions recognized by the block catalog. Physical blocks unreachable from active scripts still count toward the total.
 
-The `sja_locale` cookie selects `zh`, `en`, or `ja`, with Chinese as the default. API clients can send `X-SJA-Locale` when no valid cookie is present. Error messages, submission/review confirmations, and generated SVG reports use that locale. Reports retain their original language. User-submitted names, descriptions, and review notes are never automatically translated.
+The `sja_locale` cookie selects `zh`, `zh-Hant`, `en`, or `ja`, with Chinese as the default. API clients can send `X-SJA-Locale` when no valid cookie is present. Error messages, submission/review confirmations, and generated SVG reports use that locale. Reports retain their original language. User-submitted names, descriptions, and review notes are never automatically translated.
 
 Example `meta`:
 
@@ -76,4 +76,12 @@ TEST_DATABASE_URL='postgresql://sja:password@localhost:5432/sja_test?sslmode=dis
 
 Database integration tests skip when `TEST_DATABASE_URL` is unset. They create and clean isolated schemas and verify repeatable migrations, concurrent review, and consistent publication. Use a dedicated test database. GitHub Actions provides PostgreSQL, runs all checks, and deploys verified `main` commits.
 
-Frontend and backend communicate through same-origin `/api`; no CORS allowlist is needed. See the [deployment guide](https://github.com/remyhuang03/sja-v3/blob/main/deploy/README.md). Contact: [me@remya.top](mailto:me@remya.top).
+Frontend and backend communicate through same-origin `/api`; no CORS allowlist is needed. See the [deployment guide](https://github.com/remyhuang03/sja-frontend/blob/main/deploy/README.md). Contact: [me@remya.top](mailto:me@remya.top).
+
+## Resource submissions and image normalization
+
+`POST /api/v2/website-apply` accepts a name, URL, category, optional description, and explicit consent. `GET /api/v2/websites` returns only approved sites. `GET` and `POST /api/v2/website-review` use the existing Bearer admin token. Rejection requires notes; conditional status updates prevent duplicate publication. The additive `002_websites.sql` migration is compatible with application rollback.
+
+Website icons are fetched only on authorized approval. The fetcher rejects private/reserved addresses, pins resolved addresses, checks redirect destinations, caps response bodies, and normalizes supported images to 32 × 32 PNG. Unavailable/unsupported icons do not block publication. The media volume persists cached icons.
+
+Showcase cover images are normalized to 1200 × 900 PNG (4:3); avatars to 256 × 256 PNG (1:1). Browser uploads already contain the selected crop; other API clients receive a centered crop. Decoded dimensions and source byte limits are checked before conversion. Public showcase responses include all project links and their default flag.

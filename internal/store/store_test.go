@@ -83,4 +83,33 @@ func TestReviewTransaction(t *testing.T) {
 	if err != nil || len(apps) != 1 || apps[0].Status != "approved" {
 		t.Fatal(apps, err)
 	}
+	site := Website{ID: "00000000-0000-4000-8000-000000000002", Name: "Resource", URL: "https://example.org/", Category: "tools"}
+	if err := s.CreateWebsite(ctx, site); err != nil {
+		t.Fatal(err)
+	}
+	reviews := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); reviews <- s.ReviewWebsite(ctx, site.ID, "approved", "", "") }()
+	}
+	wg.Wait()
+	close(reviews)
+	ok, conflict = 0, 0
+	for err := range reviews {
+		if err == nil {
+			ok++
+		} else if errors.Is(err, ErrConflict) {
+			conflict++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if ok != 1 || conflict != 1 {
+		t.Fatal("concurrent website reviews", ok, conflict)
+	}
+	websites, err := s.Websites(ctx)
+	if err != nil || len(websites) != 1 {
+		t.Fatal(websites, err)
+	}
+
 }

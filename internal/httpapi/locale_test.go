@@ -9,7 +9,7 @@ import (
 func TestLocalizedErrors(t *testing.T) {
 	handler := New(nil, t.TempDir(), "test-key").Handler()
 	for _, tc := range []struct{ locale, want string }{
-		{"zh", "审核密钥无效"}, {"en", "Invalid review key."}, {"ja", "審査キーが無効です。"},
+		{"zh-Hant", "審核金鑰無效"}, {"zh", "审核密钥无效"}, {"en", "Invalid review key."}, {"ja", "審査キーが無効です。"},
 	} {
 		r := httptest.NewRequest("GET", "/api/v2/project-display-review", nil)
 		r.Header.Set("Cookie", "sja_locale="+tc.locale)

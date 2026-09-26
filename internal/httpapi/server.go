@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/remyhuang03/sja-backend/internal/analyzer"
+	"github.com/remyhuang03/sja-backend/internal/favicon"
 	"github.com/remyhuang03/sja-backend/internal/localize"
 	"github.com/remyhuang03/sja-backend/internal/store"
 )
@@ -27,10 +28,11 @@ type Server struct {
 	Store               *store.Store
 	DataDir, AdminToken string
 	jobs                chan struct{}
+	fetchIcon           func(context.Context, string) []byte
 }
 
 func New(db *store.Store, dir, token string) *Server {
-	return &Server{Store: db, DataDir: dir, AdminToken: token, jobs: make(chan struct{}, 2)}
+	return &Server{Store: db, DataDir: dir, AdminToken: token, jobs: make(chan struct{}, 2), fetchIcon: favicon.FetchPNG}
 }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -52,6 +54,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v2/project-display-review", s.admin(s.applications))
 	mux.HandleFunc("POST /api/v2/project-display-review", s.admin(s.review))
 	mux.HandleFunc("GET /api/media/{id}/{file}", s.media)
+	mux.HandleFunc("GET /api/v2/websites", s.websites)
+	mux.HandleFunc("POST /api/v2/website-apply", s.compute(s.websiteApply))
+	mux.HandleFunc("GET /api/v2/website-review", s.admin(s.websiteSubmissions))
+	mux.HandleFunc("POST /api/v2/website-review", s.admin(s.compute(s.websiteReview)))
 	mux.HandleFunc("POST /api/analyze", func(w http.ResponseWriter, r *http.Request) { fail(w, 410, "请使用 /api/v2/analyze") })
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w = &localizedWriter{ResponseWriter: w, locale: localize.Locale(r)}

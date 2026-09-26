@@ -87,6 +87,7 @@ func TestLocalizedSVG(t *testing.T) {
 		{"en", "SJA Project Analysis", "Motion"},
 		{"ja", "SJA 作品分析レポート", "動き"},
 		{"zh", "SJA 作品分析报告", "运动"},
+		{"zh-Hant", "SJA 作品分析報告", "運動"},
 	} {
 		svg := string(SVG(report, "desc", "top12", tc.locale))
 		if !strings.Contains(svg, tc.title) || !strings.Contains(svg, tc.label) {
