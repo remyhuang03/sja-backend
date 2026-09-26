@@ -8,3 +8,5 @@ sja-backend
 /var/**
 !/var/**/
 !README.md
+
+!.env.example
