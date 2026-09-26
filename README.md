@@ -1,67 +1,72 @@
-# SJA Plus Go 后端
+# SJA Plus Go backend
 
-## 架构
+## Architecture
 
-后端采用 Go 标准库 `net/http` 和 pgx PostgreSQL 连接池。运行时无需 Node.js、Python、MySQL 或外部 SVG 工具。
+The backend uses Go's `net/http` package and the pgx PostgreSQL connection pool. Its runtime requires no Node.js, Python, MySQL, or external SVG tools.
 
-| 目录 | 职责 |
+| Package | Responsibility |
 | --- | --- |
-| `internal/analyzer` | 安全读取作品、积木统计、SVG 报告、结构相似度 |
-| `internal/httpapi` | HTTP、上传限制、参数校验、管理员鉴权 |
-| `internal/store` | PostgreSQL 查询、审核事务和嵌入式版本迁移 |
+| `internal/analyzer` | Bounded project parsing, block statistics, SVG reports, structural comparison |
+| `internal/httpapi` | HTTP routing, upload limits, validation, administrator authentication |
+| `internal/store` | PostgreSQL queries, review transactions, embedded versioned migrations |
+| `internal/localize` | Chinese, English, and Japanese API/report messages |
 
-分析逻辑不共享请求状态。迭代遍历避免循环引用导致栈溢出；ZIP 仅读取根目录的 `project.json`，不解压素材。每个文件限制 48 MiB，解压后的 JSON 限制 64 MiB，积木限制 200,000 个。分析、对比和图片解码共用两个处理名额，满载返回 429。图片按内容验证并转为 PNG，限制像素数。
+Analysis has no mutable request state shared across requests. Iterative traversal handles cycles and shared inputs. ZIP parsing reads only the root `project.json`, without extracting assets. Limits are 48 MiB per source file, 64 MiB for expanded JSON, and 200,000 blocks. Analysis, comparison, and image decoding share two processing slots; excess requests receive HTTP 429. Images are decoded, checked for dimensions, and re-encoded as PNG.
 
-申请和展示使用同一数据库。审核先锁定申请行，再在一个事务中更新状态和插入展示项，唯一约束防止重复发布。审核接口需要 `Authorization: Bearer <ADMIN_TOKEN>`；不会把数据库错误或磁盘路径返回给客户端。
+Submissions and published projects share one database. Reviews lock the application row before updating status and creating the showcase entry in one transaction. A unique constraint prevents duplicate publication. Review endpoints require `Authorization: Bearer <ADMIN_TOKEN>`. Internal database errors and disk paths are not exposed to clients.
 
-## 运行
+## Run
 
-推荐使用相邻 `sja-v3` 仓库内的 `compose.yaml`，它统一启动 PostgreSQL、后端和前端。
+Use `compose.yaml` in the adjacent `sja-v3` repository to start PostgreSQL, backend, and frontend together.
 
-独立开发需要 Go 1.27 和 PostgreSQL 18：
+Standalone development requires Go 1.27 and PostgreSQL 18:
 
 ```sh
 export DATABASE_URL='postgresql://sja:password@localhost:5432/sja?sslmode=disable'
-export ADMIN_TOKEN='至少32字符的随机密钥'
+export ADMIN_TOKEN="$(openssl rand -hex 32)"
 go run .
 ```
 
-支持 `BACKEND_PORT`（默认 `8080`）、`DATA_DIR`（默认 `./var`）。数据库连接必填；审核密钥未配置时，审核接口返回 503。首次启动自动执行迁移。容器使用非 root 用户，数据写入 `/data` 卷。原作品请求结束后删除临时文件，报告保留 30 天，申请图片持久保存。
+Optional variables are `BACKEND_PORT` (default `8080`) and `DATA_DIR` (default `./var`). A database URL is required. If no administrator key is configured, review endpoints return HTTP 503. Configured keys must contain at least 32 characters. Migrations run automatically on startup. The container runs as a non-root user and stores persistent files under `/data`.
+
+Accepted original projects from analysis and comparison are retained privately for 30 days under `uploads`, then removed by an hourly cleanup task. Multipart temporary files are cleaned when requests finish. SVG reports are retained permanently under `reports`; they have no automatic expiration. Showcase images remain in persistent storage. Sources are saved with random server-generated names and mode `0600`, and have no public download route. Analysis sources share the identifier in their report filename; comparison pairs share an identifier with `_original` and `_compared` suffixes.
 
 ## API
 
-| 方法 | 路径 | 请求与响应 |
+| Method | Path | Request and response |
 | --- | --- | --- |
-| GET | `/api/healthz` | 进程存活 |
-| GET | `/api/readyz` | PostgreSQL 连接就绪 |
-| POST | `/api/v2/analyze` | multipart：`file`、`is_sort`、`is_high_rank_cate`；返回 `token` 报告 URL 和 `report` |
-| GET | `/api/report-img?stamp=...` | SVG 报告 |
-| POST | `/api/v2/compare` | multipart：`original`、`compared`；返回 `data` 相似度与两个报告 |
-| POST | `/api/v2/project-display-apply` | multipart：`meta` JSON、`cover`、`avatar`；返回 201 和申请 ID |
-| GET | `/api/v2/projects-display?n=5` | 最新审核通过的作品，`n` 为 1–100 |
-| GET | `/api/v2/project-display-review?limit=20&offset=0` | 管理员申请列表，按时间倒序分页 |
-| POST | `/api/v2/project-display-review` | 管理员 JSON：`id`、`status`、`notes` |
-| GET | `/api/media/{id}/{file}` | 申请图片，文件名为 `cover.png` 或 `avatar.png` |
+| GET | `/api/healthz` | Process liveness |
+| GET | `/api/readyz` | PostgreSQL readiness |
+| POST | `/api/v2/analyze` | Multipart `file`, `is_sort`, `is_high_rank_cate`; returns a report URL in `token` and statistics in `report` |
+| GET | `/api/report-img?stamp=...` | SVG report |
+| POST | `/api/v2/compare` | Multipart `original`, `compared`; returns similarity and both reports in `data` |
+| POST | `/api/v2/project-display-apply` | Multipart `meta` JSON, `cover`, `avatar`; returns HTTP 201 and an application ID |
+| GET | `/api/v2/projects-display?n=5` | Latest approved projects; `n` is 1–100 |
+| GET | `/api/v2/project-display-review?limit=20&offset=0` | Administrator-only application list, newest first |
+| POST | `/api/v2/project-display-review` | Administrator JSON: `id`, `status`, `notes` |
+| GET | `/api/media/{id}/{file}` | Image: `cover.png` or `avatar.png` |
 
-分析排序支持 `desc`、`asc`、`none`；分类支持 `top12`、`classic`。兼容旧布尔值 `0`、`1`。统计中的有效脚本由积木目录中的事件帽和自制积木定义识别；不从有效脚本可达的实体积木仍计入总数。
+Sort options are `desc`, `asc`, and `none`. Category modes are `top12` and `classic`. Legacy `0` and `1` values remain accepted. Active scripts begin at event hats or custom block definitions recognized by the block catalog. Physical blocks unreachable from active scripts still count toward the total.
 
-`meta` 格式：
+The `sja_locale` cookie selects `zh`, `en`, or `ja`, with Chinese as the default. API clients can send `X-SJA-Locale` when no valid cookie is present. Error messages, submission/review confirmations, and generated SVG reports use that locale. Reports retain their original language. User-submitted names, descriptions, and review notes are never automatically translated.
+
+Example `meta`:
 
 ```json
 {
-  "project_name": "作品名称",
-  "author_name": "作者",
+  "project_name": "Sample project",
+  "author_name": "Example author",
   "author_link": "https://scratch.mit.edu/users/example",
-  "brief": "不超过20字的简介",
+  "brief": "A sample project",
   "links": [{"platform": "scratch", "url": "https://scratch.mit.edu/projects/123", "is_default": true}]
 }
 ```
 
-封面最大 5 MiB，头像最大 2 MiB；接受 JPEG、PNG、WebP，最长边不超过 4096 像素，像素总数不超过 12,000,000。作品链接为 1–10 个，必须恰有一个默认链接。审核状态只能由 `pending` 变为 `approved` 或 `rejected`，重复审核返回 409，拒绝时须填写备注。
+Covers are limited to 5 MiB; avatars to 2 MiB. Accepted formats are JPEG, PNG, and WebP, with each side at most 4096 pixels and at most 12,000,000 pixels total. Provide 1–10 project links and exactly one default. Reviews transition only from `pending` to `approved` or `rejected`; repeated reviews return HTTP 409. Rejections require notes.
 
-相似度使用积木 opcode 和相邻 opcode 的多重集合 Dice 系数，忽略 ID、坐标、输入常量、素材和角色名。两个分量等权；两侧都没有连接时仅使用 opcode 分量。这是结构筛查工具，不能独立判断抄袭，也不等同于语义相似度。
+Comparison uses multiset Dice coefficients for opcodes and adjacent opcode pairs. It ignores IDs, positions, input constants, assets, and sprite names. The components have equal weight unless both projects have no edges, in which case only opcode similarity is used. This is a structural screening tool, not a semantic comparison or independent proof of plagiarism.
 
-## 测试与发布
+## Tests and releases
 
 ```sh
 go vet ./...
@@ -69,6 +74,6 @@ go test -race ./...
 TEST_DATABASE_URL='postgresql://sja:password@localhost:5432/sja_test?sslmode=disable' go test -race ./...
 ```
 
-未设置 `TEST_DATABASE_URL` 时跳过数据库集成测试。集成测试创建并清理专用 schema，验证重复迁移、并发审核和展示一致性。请使用独立测试数据库。GitHub Actions 自动提供 PostgreSQL 服务，在 `main` 检查通过后发布后端镜像。
+Database integration tests skip when `TEST_DATABASE_URL` is unset. They create and clean isolated schemas and verify repeatable migrations, concurrent review, and consistent publication. Use a dedicated test database. GitHub Actions provides PostgreSQL, runs all checks, and deploys verified `main` commits.
 
-前端和后端通过同域 `/api` 通信，无需跨域白名单。部署详情见 [前端部署文档](https://github.com/remyhuang03/sja-v3/blob/main/deploy/README.md)。
+Frontend and backend communicate through same-origin `/api`; no CORS allowlist is needed. See the [deployment guide](https://github.com/remyhuang03/sja-v3/blob/main/deploy/README.md). Contact: [me@remya.top](mailto:me@remya.top).

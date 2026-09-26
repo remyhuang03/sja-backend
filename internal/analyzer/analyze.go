@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/csv"
 	"fmt"
+	"github.com/remyhuang03/sja-backend/internal/localize"
 	"html"
 	"sort"
 	"strings"
@@ -142,7 +143,13 @@ func Analyze(p *Project, size int) (Report, error) {
 }
 
 // SVG escapes all project-controlled category names before embedding them.
-func SVG(r Report, order, mode string) []byte {
+func SVG(r Report, order, mode string, locales ...string) []byte {
+	locale := "zh"
+	if len(locales) > 0 {
+		locale = locales[0]
+	}
+	text := func(message string) string { return html.EscapeString(localize.Text(locale, message)) }
+
 	keys := []string{}
 	if mode == "classic" {
 		keys = []string{"motion", "looks", "sound", "event", "control", "sensing", "operator", "data", "procedures", "pen", "canvas"}
@@ -170,13 +177,13 @@ func SVG(r Report, order, mode string) []byte {
 	}
 	height := 230 + len(keys)*30
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="%d" viewBox="0 0 720 %d" role="img"><title>SJA 作品分析报告</title><rect width="720" height="%d" rx="20" fill="#191c23"/><g font-family="sans-serif" fill="#f4f4f5"><text x="32" y="48" font-size="26" font-weight="bold">SJA 作品分析报告</text>`, height, height, height)
-	fmt.Fprintf(&b, `<text x="32" y="84" font-size="14">%.2f MiB · %d 个角色 · %d 个造型 · %d 个声音</text>`, float64(r.FileSize)/(1<<20), r.SpriteCount, r.CostumeCount, r.SoundCount)
-	fmt.Fprintf(&b, `<text x="32" y="126" font-size="19">积木 %d / 有效 %d</text><text x="360" y="126" font-size="19">脚本 %d / 有效 %d</text><text x="32" y="165" font-size="13" fill="#a1a1aa">分类统计 · %s</text>`, r.TotalBlockCount, r.ValidBlockCount, r.TotalParagraphCount, r.ValidParagraphCount, r.CoreVersion)
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="%d" viewBox="0 0 720 %d" role="img"><title>%s</title><rect width="720" height="%d" rx="20" fill="#191c23"/><g font-family="sans-serif" fill="#f4f4f5"><text x="32" y="48" font-size="26" font-weight="bold">%s</text>`, height, height, text("SJA 作品分析报告"), height, text("SJA 作品分析报告"))
+	fmt.Fprintf(&b, `<text x="32" y="84" font-size="14">%.2f MiB · %d %s · %d %s · %d %s</text>`, float64(r.FileSize)/(1<<20), r.SpriteCount, text("个角色"), r.CostumeCount, text("个造型"), r.SoundCount, text("个声音"))
+	fmt.Fprintf(&b, `<text x="32" y="126" font-size="16">%s %d / %s %d</text><text x="360" y="126" font-size="16">%s %d / %s %d</text><text x="32" y="165" font-size="13" fill="#a1a1aa">%s · %s</text>`, text("积木"), r.TotalBlockCount, text("有效"), r.ValidBlockCount, text("脚本"), r.TotalParagraphCount, text("有效"), r.ValidParagraphCount, text("分类统计"), html.EscapeString(r.CoreVersion))
 	for i, k := range keys {
 		label := k
 		if c, ok := categories[k]; ok {
-			label = c[0]
+			label = localize.Text(locale, c[0])
 		}
 		y := 200 + i*30
 		width := 0

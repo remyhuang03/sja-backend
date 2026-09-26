@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/remyhuang03/sja-backend/internal/analyzer"
+	"github.com/remyhuang03/sja-backend/internal/localize"
 	"github.com/remyhuang03/sja-backend/internal/store"
 )
 
@@ -53,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/media/{id}/{file}", s.media)
 	mux.HandleFunc("POST /api/analyze", func(w http.ResponseWriter, r *http.Request) { fail(w, 410, "请使用 /api/v2/analyze") })
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w = &localizedWriter{ResponseWriter: w, locale: localize.Locale(r)}
 		started := time.Now()
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		defer func() {
@@ -65,7 +67,31 @@ func (s *Server) Handler() http.Handler {
 		mux.ServeHTTP(w, r)
 	})
 }
+
+type localizedWriter struct {
+	http.ResponseWriter
+	locale string
+}
+
+func (w *localizedWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
+	if lw, ok := w.(*localizedWriter); ok {
+		// Translate only protocol messages, never user-submitted content.
+		switch data := v.(type) {
+		case map[string]string:
+			for _, key := range []string{"message", "msg"} {
+				if message, exists := data[key]; exists {
+					data[key] = localize.Text(lw.locale, message)
+				}
+			}
+		case map[string]any:
+			if message, ok := data["message"].(string); ok {
+				data["message"] = localize.Text(lw.locale, message)
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
@@ -165,7 +191,13 @@ func (s *Server) analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := fmt.Sprintf("%d_%s.svg", time.Now().Unix(), randomID())
-	if err = os.WriteFile(filepath.Join(s.DataDir, "reports", token), analyzer.SVG(report, order, mode), 0644); err != nil {
+	source, err := s.saveUpload(strings.TrimSuffix(token, ".svg"), data, name)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	if err = os.WriteFile(filepath.Join(s.DataDir, "reports", token), analyzer.SVG(report, order, mode, localize.Locale(r)), 0644); err != nil {
+		_ = os.Remove(source)
 		s.internal(w, err)
 		return
 	}
@@ -199,6 +231,17 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request) {
 	result, err := analyzer.Compare(ap, bp, len(a), len(b))
 	if err != nil {
 		fail(w, 400, err.Error())
+		return
+	}
+	id := fmt.Sprintf("%d_%s", time.Now().Unix(), randomID())
+	original, err := s.saveUpload(id+"_original", a, an)
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	if _, err := s.saveUpload(id+"_compared", b, bn); err != nil {
+		_ = os.Remove(original)
+		s.internal(w, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"status": "ok", "data": result})
@@ -261,35 +304,4 @@ func (s *Server) applications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, items)
-}
-
-// RunCleanup retains shareable reports for 30 days; uploaded source files are never retained.
-func (s *Server) RunCleanup(ctx context.Context) {
-	clean := func() {
-		entries, err := os.ReadDir(filepath.Join(s.DataDir, "reports"))
-		if err != nil {
-			slog.Error("report cleanup", "error", err)
-			return
-		}
-		for _, e := range entries {
-			if !reportName.MatchString(e.Name()) {
-				continue
-			}
-			info, err := e.Info()
-			if err == nil && time.Since(info.ModTime()) > 30*24*time.Hour {
-				_ = os.Remove(filepath.Join(s.DataDir, "reports", e.Name()))
-			}
-		}
-	}
-	clean()
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			clean()
-		}
-	}
 }

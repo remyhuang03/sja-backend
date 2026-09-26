@@ -80,3 +80,17 @@ func TestConcurrentIndependentReports(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalizedSVG(t *testing.T) {
+	report := Report{CategoryCount: map[string]int{"motion": 2}, TotalBlockCount: 2}
+	for _, tc := range []struct{ locale, title, label string }{
+		{"en", "SJA Project Analysis", "Motion"},
+		{"ja", "SJA 作品分析レポート", "動き"},
+		{"zh", "SJA 作品分析报告", "运动"},
+	} {
+		svg := string(SVG(report, "desc", "top12", tc.locale))
+		if !strings.Contains(svg, tc.title) || !strings.Contains(svg, tc.label) {
+			t.Fatalf("Missing %s translations: %s", tc.locale, svg)
+		}
+	}
+}
